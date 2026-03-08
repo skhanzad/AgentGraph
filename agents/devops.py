@@ -1,4 +1,6 @@
 """DevOps Agent: produces Dockerfile and run instructions for the full package."""
+import re
+
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
@@ -50,9 +52,18 @@ Exact commands: how to run locally (e.g. pip install -r requirements.txt && pyth
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
 
+    # Extract individual sections so downstream consumers get clean data
+    def _section(header):
+        match = re.search(rf"##\s*{re.escape(header)}\s*\n(.*?)(?=\n##\s|\Z)", content, re.DOTALL | re.IGNORECASE)
+        return match.group(1).strip() if match else ""
+
+    dockerfile_section = _section("Dockerfile") or content
+    ci_section = _section("CI")
+    run_section = _section("Run instructions") or _section("Run")
+
     return {
-        "dockerfile": content,
-        "cicd_config": content,
-        "run_instructions": content,
+        "dockerfile": dockerfile_section,
+        "cicd_config": ci_section,
+        "run_instructions": run_section or content,
         "done": True,
     }

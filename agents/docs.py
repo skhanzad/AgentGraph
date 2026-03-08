@@ -1,4 +1,6 @@
 """Documentation Agent: README, API docs, inline comments."""
+import re
+
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
@@ -42,8 +44,11 @@ Output in this structure (use the headers):
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
 
+    # Extract API section separately so it can be written as a standalone doc
+    api_match = re.search(r"## API.*?\n(.*?)(?=\n## |\Z)", content, re.DOTALL | re.IGNORECASE)
+    api_docs = api_match.group(0).strip() if api_match else ""
+
     return {
         "readme": content,
-        "api_docs": content,
-        "inline_docs": "",
+        "api_docs": api_docs,
     }
