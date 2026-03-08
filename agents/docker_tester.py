@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import tempfile
 
+from artifact_utils import clean_generated_content
 from state import SoftwareAgentState
 from config import MAX_DOCKER_TEST_ITERATIONS
 
@@ -37,25 +38,17 @@ def _strip_fences(text: str) -> str:
     return text
 
 
-def _extract_test_code(raw: str) -> str:
-    """Extract runnable test code from the tester agent's output."""
-    # Try to pull code from a ```python fence inside ## Test Code section
-    section = re.search(r"## Test Code\s*\n(.*?)(?=\n## |\Z)", raw, re.DOTALL | re.IGNORECASE)
-    block = section.group(1) if section else raw
-    fence = re.search(r"```(?:python)?\s*\n(.*?)```", block, re.DOTALL)
-    if fence:
-        return fence.group(1).strip()
-    # If no fence, return the raw section stripped of markdown headers
-    code = re.sub(r"^##.*$", "", block, flags=re.MULTILINE).strip()
-    return code
+def _looks_like_test_file(path: str) -> bool:
+    """Return True when the path appears to point to a test file."""
+    base = os.path.basename(path).lower()
+    return base.startswith("test_") or base.endswith("_test.py") or "tests/" in path.lower()
 
 
 def _find_test_files(task_to_file: dict[str, str]) -> list[str]:
     """Return file paths from the task list that look like test files."""
     test_files = []
     for path in task_to_file.values():
-        base = os.path.basename(path).lower()
-        if base.startswith("test_") or base.endswith("_test.py") or "tests/" in path.lower():
+        if _looks_like_test_file(path):
             test_files.append(path)
     return test_files
 
@@ -95,6 +88,7 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
     dockerfile_raw = state.get("dockerfile", "")
     tech_stack = state.get("tech_stack", "")
     test_code_raw = state.get("test_code", "")
+    generated_test_files = state.get("generated_test_files") or {}
 
     # Map task_id -> file path
     task_to_file = {}
@@ -113,7 +107,7 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
         for task_id, code in code_artifacts.items():
             path = task_to_file.get(task_id, f"{task_id}.py")
             path = path.lstrip("/") or "main.py"
-            code = _strip_fences(code)
+            code = clean_generated_content(path, code)
             full = os.path.join(tmpdir, path)
             d = os.path.dirname(full)
             if d:
@@ -122,22 +116,26 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
                 f.write(code)
 
         # Write tester-generated test code if it's not already covered by a task
-        if test_code_raw:
-            extracted = _extract_test_code(test_code_raw)
+        parsed_test_files = dict(generated_test_files)
+        if not parsed_test_files and test_code_raw:
+            extracted = clean_generated_content("tests/test_generated.py", test_code_raw)
             if extracted and ("import" in extracted or "def test_" in extracted):
-                # Only write if no test files exist in code_artifacts, or write as extra
-                test_dest = "test_generated.py"
-                if test_files:
-                    test_dest = "test_generated_extra.py"
-                full = os.path.join(tmpdir, test_dest)
-                with open(full, "w", encoding="utf-8") as f:
-                    f.write(extracted)
-                if test_dest not in [os.path.basename(tf) for tf in test_files]:
-                    test_files.append(test_dest)
-                print(f"    Wrote tester-generated tests → {test_dest}")
+                parsed_test_files["tests/test_generated.py"] = extracted
+
+        for rel_path, content in parsed_test_files.items():
+            test_dest = rel_path.lstrip("/") or "tests/test_generated.py"
+            full = os.path.join(tmpdir, test_dest)
+            d = os.path.dirname(full)
+            if d:
+                os.makedirs(d, exist_ok=True)
+            with open(full, "w", encoding="utf-8") as f:
+                f.write(clean_generated_content(test_dest, content))
+            if test_dest not in test_files and _looks_like_test_file(test_dest):
+                test_files.append(test_dest)
+            print(f"    Wrote tester-generated tests -> {test_dest}")
 
         # Write Dockerfile
-        df_body = _strip_fences(dockerfile_raw)
+        df_body = clean_generated_content("Dockerfile", _strip_fences(dockerfile_raw))
         fence = re.search(r"```(?:dockerfile?)?\s*\n(.*?)```", df_body, re.DOTALL)
         if fence:
             df_body = fence.group(1).strip()

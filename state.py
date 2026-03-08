@@ -43,6 +43,7 @@ class SoftwareAgentState(TypedDict, total=False):
     test_results: str
     test_passed: bool
     test_iteration: int
+    generated_test_files: dict[str, str]  # file path -> test file content
 
     # Debugger
     failure_analysis: str

@@ -5,22 +5,10 @@ import os
 import re
 import sys
 
+from artifact_utils import clean_generated_content
 from config import OUTPUT_DIR
 from state import SoftwareAgentState
 from graph import build_graph
-
-
-def _strip_markdown_fences(text: str) -> str:
-    """Remove outer markdown code fences from a string."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-    return text
 
 
 def _extract_dockerfile(raw: str) -> str:
@@ -66,6 +54,7 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
     os.makedirs(out_dir, exist_ok=True)
     task_list = state.get("task_list") or []
     code_artifacts = state.get("code_artifacts") or {}
+    generated_test_files = state.get("generated_test_files") or {}
     file_structure = state.get("file_structure", "")
 
     # Map task_id -> file path from task_list
@@ -80,7 +69,7 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
         path = path.lstrip("/")
         if not path:
             path = "main.py"
-        code = _strip_markdown_fences(code)
+        code = clean_generated_content(path, code)
         full = os.path.join(out_dir, path)
         if full in written_files:
             # Append to existing file if multiple tasks target the same file
@@ -95,7 +84,16 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
     if not task_to_file and code_artifacts:
         main_path = os.path.join(out_dir, "main.py")
         if main_path not in written_files:
-            _write_file(main_path, state.get("current_code", ""))
+            _write_file(main_path, clean_generated_content("main.py", state.get("current_code", "")))
+
+    # ----- Tester: write parsed test files when available -----
+    for path, content in generated_test_files.items():
+        clean_path = (path or "tests/test_generated.py").lstrip("/")
+        full = os.path.join(out_dir, clean_path)
+        if full in written_files:
+            continue
+        _write_file(full, clean_generated_content(clean_path, content))
+        written_files.add(full)
 
     # ----- Docs: README -----
     readme = state.get("readme", "")
@@ -107,7 +105,7 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
     if dockerfile_raw:
         body = _extract_dockerfile(dockerfile_raw)
         if body:
-            _write_file(os.path.join(out_dir, "Dockerfile"), body)
+            _write_file(os.path.join(out_dir, "Dockerfile"), clean_generated_content("Dockerfile", body))
             dockerignore_path = os.path.join(out_dir, ".dockerignore")
             if not os.path.exists(dockerignore_path):
                 _write_file(dockerignore_path, ".git\n__pycache__\n*.pyc\n.venv\n.env\n")

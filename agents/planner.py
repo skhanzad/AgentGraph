@@ -5,6 +5,7 @@ import re
 
 from state import SoftwareAgentState
 from llm import get_llm
+from rag import build_rag_context, store_output
 
 
 def planner_node(state: SoftwareAgentState) -> SoftwareAgentState:
@@ -12,6 +13,8 @@ def planner_node(state: SoftwareAgentState) -> SoftwareAgentState:
     architecture_doc = state.get("architecture_doc", "")
     file_structure = state.get("file_structure", "")
     prd = state.get("prd", "")
+
+    rag_ctx = build_rag_context("planner", f"{architecture_doc[:300]} task planning")
 
     system = """You are a Task Planner. Given the architecture and file structure, produce tasks that together form the ENTIRE codebase as a shippable package. Every file in the File Structure must be covered by exactly one task.
 
@@ -37,10 +40,12 @@ Example for a Python app:
 
 Output ONLY the JSON array, no markdown or explanation. Order tasks so dependencies come first. Every file in the architecture's File Structure must appear as a task's "file"."""
 
-    messages = [
-        SystemMessage(content=system),
-        HumanMessage(content=f"Architecture:\n{architecture_doc}\n\nFile structure:\n{file_structure}\n\nPRD:\n{prd}\n\nProduce the task list as JSON array."),
-    ]
+    human = f"Architecture:\n{architecture_doc}\n\nFile structure:\n{file_structure}\n\nPRD:\n{prd}"
+    if rag_ctx:
+        human += f"\n\nRetrieved context:\n{rag_ctx}"
+    human += "\n\nProduce the task list as JSON array."
+
+    messages = [SystemMessage(content=system), HumanMessage(content=human)]
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
     content = content.strip()
@@ -54,6 +59,8 @@ Output ONLY the JSON array, no markdown or explanation. Order tasks so dependenc
             task_list = [{"id": "task_1", "spec": "Implement project per architecture", "deps": [], "file": "src/main.py"}]
     except json.JSONDecodeError:
         task_list = [{"id": "task_1", "spec": "Implement project per architecture", "deps": [], "file": "src/main.py"}]
+
+    store_output("planner", content, collection="episodic")
 
     return {
         "task_list": task_list,

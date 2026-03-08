@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
 from llm import get_llm
+from rag import build_rag_context, store_output
 
 
 def _extract_section(doc: str, header: str) -> str:
@@ -18,6 +19,13 @@ def architect_node(state: SoftwareAgentState) -> SoftwareAgentState:
     llm = get_llm()
     project_brief = state.get("project_brief", "")
     prd = state.get("prd", "")
+
+    # RAG: retrieve past architecture decisions + web docs for tech stack
+    rag_ctx = build_rag_context(
+        "architect",
+        f"{project_brief[:300]} architecture design",
+        web_query=f"{project_brief[:100]} framework architecture best practices",
+    )
 
     system = """You are a Software Architect. Your output will be saved as Architecture.md and used by all downstream agents (Planner, Coder, Reviewer, Tester, Docs, DevOps). Produce a single, self-contained Architecture.md document.
 
@@ -55,15 +63,20 @@ project/
 
 Output only the markdown content of Architecture.md. Start with "# Architecture". No preamble or meta-commentary."""
 
-    messages = [
-        SystemMessage(content=system),
-        HumanMessage(content=f"Project brief:\n{project_brief}\n\nPRD / User stories:\n{prd}\n\nProduce Architecture.md content."),
-    ]
+    human = f"Project brief:\n{project_brief}\n\nPRD / User stories:\n{prd}"
+    if rag_ctx:
+        human += f"\n\nRetrieved reference material:\n{rag_ctx}"
+    human += "\n\nProduce Architecture.md content."
+
+    messages = [SystemMessage(content=system), HumanMessage(content=human)]
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
     content = content.strip()
     if not content.startswith("#"):
         content = "# Architecture\n\n" + content
+
+    # Store architecture in memory for downstream agents
+    store_output("architect", content, collection="architecture")
 
     # Extract individual sections for downstream agents
     tech_stack = _extract_section(content, "Tech Stack")

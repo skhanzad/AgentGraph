@@ -29,6 +29,9 @@ wheels/
 # Generated output
 generated_project/
 
+# Agent memory (ChromaDB)
+.agentgraph_memory/
+
 # IDE / editor
 .idea/
 .vscode/

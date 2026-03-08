@@ -5,6 +5,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
 from llm import get_llm
+from rag import build_rag_context, store_output
 
 
 def _extract_section(doc: str, header: str) -> str:
@@ -18,6 +19,8 @@ def pm_node(state: SoftwareAgentState) -> SoftwareAgentState:
     llm = get_llm()
     project_brief = state.get("project_brief", "")
     user_request = state.get("user_request", "")
+
+    rag_ctx = build_rag_context("pm", f"{user_request} {project_brief[:200]}")
 
     system = """You are a Product Manager. Given a project brief, produce:
 1. PRD (Product Requirements Document): 3-6 bullet points of high-level requirements.
@@ -35,12 +38,16 @@ Output in this exact structure (use the headers):
 ## Acceptance Criteria
 - ..."""
 
-    messages = [
-        SystemMessage(content=system),
-        HumanMessage(content=f"Project brief:\n{project_brief}\n\nOriginal request: {user_request}\n\nProduce PRD, user stories, and acceptance criteria."),
-    ]
+    human = f"Project brief:\n{project_brief}\n\nOriginal request: {user_request}"
+    if rag_ctx:
+        human += f"\n\nContext from knowledge base:\n{rag_ctx}"
+    human += "\n\nProduce PRD, user stories, and acceptance criteria."
+
+    messages = [SystemMessage(content=system), HumanMessage(content=human)]
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
+
+    store_output("pm", content, collection="episodic")
 
     # Parse individual sections so they are stored separately
     user_stories = _extract_section(content, "User Stories")
