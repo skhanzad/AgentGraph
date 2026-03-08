@@ -15,7 +15,7 @@ def tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
 
     system = """You are a QA Engineer. Given the code and tech stack:
 1. Propose a short test plan (unit or integration) as bullet points.
-2. If the language is Python: write 1-3 small test functions (e.g. using pytest or unittest) that exercise the main behavior.
+2. Write 1-3 small test functions (e.g. using pytest) that exercise the main behavior. The test code must be self-contained and runnable — include all necessary imports (import the modules under test using the paths from the file structure). Do NOT use placeholder imports.
 3. Then simulate running the tests: either say "All tests passed" or "Tests failed: <reason>".
 
 Output format:
@@ -23,7 +23,12 @@ Output format:
 - ...
 
 ## Test Code
-... (actual test code)
+```python
+import ...
+
+def test_...:
+    ...
+```
 
 ## Result
 All tests passed.

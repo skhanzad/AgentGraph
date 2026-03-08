@@ -20,14 +20,19 @@ def devops_node(state: SoftwareAgentState) -> SoftwareAgentState:
     has_requirements = any("requirements" in f for f in task_files)
     entry_hint = "src/main.py" if any("main" in f for f in task_files) else "main.py"
 
-    system = """You are a DevOps engineer. Your job is to produce a complete Dockerfile so the entire codebase runs as a containerized package.
+    # Identify test files from the task list
+    test_files = [f for f in task_files if "test" in f.lower()]
+
+    system = """You are a DevOps engineer. Your job is to produce a complete Dockerfile so the entire codebase — including tests — runs as a containerized package.
 
 Requirements for the Dockerfile:
 - Base image appropriate for the tech stack (e.g. python:3.11-slim for Python).
-- Copy the full project into the image (COPY . . or COPY project/ .).
-- Install dependencies: for Python use RUN pip install -r requirements.txt (or pip install . if pyproject.toml exists).
-- Set working directory and expose any needed port (EXPOSE if it's a server).
-- Set CMD or ENTRYPOINT to run the main application (e.g. CMD ["python", "src/main.py"] or CMD ["python", "-m", "src.main"]).
+- Copy the FULL project into the image including test files (COPY . /app or similar).
+- Install ALL dependencies including test runners. For Python: RUN pip install --no-cache-dir -r requirements.txt && pip install pytest (always include pytest even if not in requirements.txt).
+- Set WORKDIR to the project root inside the container.
+- Expose any needed port (EXPOSE if it's a server).
+- Set CMD to run the main application (e.g. CMD ["python", "src/main.py"]).
+- The image must support running tests by overriding CMD at runtime, e.g. `docker run image python -m pytest -v`.
 - No placeholder or "fill in" steps—the Dockerfile must be complete and runnable as-is.
 
 Output format (use these exact section headers):
@@ -39,13 +44,15 @@ Output format (use these exact section headers):
 One-line or minimal CI suggestion (e.g. "Run: pytest").
 
 ## Run instructions
-Exact commands: how to run locally (e.g. pip install -r requirements.txt && python src/main.py) and how to build/run with Docker (docker build -t app . && docker run app)."""
+Exact commands: how to run locally (e.g. pip install -r requirements.txt && python src/main.py) and how to build/run with Docker (docker build -t app . && docker run app).
+Include how to run tests: docker run app python -m pytest -v"""
 
     messages = [
         SystemMessage(content=system),
         HumanMessage(
             content=f"Tech stack:\n{tech_stack}\n\nFile structure:\n{file_structure}\n\n"
-            f"Dependency file present: {has_requirements}. Main entry hint: {entry_hint}\n\n"
+            f"Dependency file present: {has_requirements}. Main entry hint: {entry_hint}\n"
+            f"Test files: {test_files}\n\n"
             f"README (context):\n{readme[:1500]}\n\nProduce a complete Dockerfile plus CI and run instructions."
         ),
     ]

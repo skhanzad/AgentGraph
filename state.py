@@ -59,6 +59,12 @@ class SoftwareAgentState(TypedDict, total=False):
     cicd_config: str
     run_instructions: str
 
+    # Docker Tester
+    docker_test_passed: bool
+    docker_test_results: str
+    docker_test_iteration: int
+    docker_test_phase: bool  # True while in the docker-test → debugger → coder loop
+
     # Control / routing
     next_node: Optional[str]
     error: Optional[str]

@@ -9,6 +9,7 @@ from .tester import tester_node
 from .debugger import debugger_node
 from .docs import docs_node
 from .devops import devops_node
+from .docker_tester import docker_tester_node
 
 __all__ = [
     "orchestrator_node",
@@ -21,4 +22,5 @@ __all__ = [
     "debugger_node",
     "docs_node",
     "devops_node",
+    "docker_tester_node",
 ]
