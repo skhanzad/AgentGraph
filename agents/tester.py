@@ -6,13 +6,15 @@ import re
 import subprocess
 import sys
 import tempfile
+import hashlib
 
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from artifact_utils import clean_generated_content
+from llm import get_state_llm
 from project_writer import write_project
 from state import SoftwareAgentState
-from llm import get_llm
+from config import MAX_TEST_ITERATIONS
 
 
 def _infer_test_file(task_list: list[dict]) -> str:
@@ -169,7 +171,7 @@ def _run_unittest_suite(project_dir: str, test_files: dict[str, str]) -> tuple[b
 
 
 def tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     current_code = state.get("current_code", "")
     architecture_doc = state.get("architecture_doc", "")
     tech_stack = state.get("tech_stack", "")
@@ -224,20 +226,33 @@ import unittest
     ).strip()
 
     feedback = ""
+    error = None
+    failure_signature = state.get("test_failure_signature", "")
     if not test_passed:
+        current_failure_signature = hashlib.sha256(execution_output.encode("utf-8")).hexdigest()
         feedback = (
             "Reimplement the project so the executed test suite passes.\n\n"
             f"Test file: {primary_test_path}\n\n"
             f"Execution output:\n{execution_output}"
         )
+        failure_signature = current_failure_signature
+        if test_iteration >= MAX_TEST_ITERATIONS - 1:
+            error = (
+                f"Tests did not converge after {MAX_TEST_ITERATIONS} iterations.\n\n"
+                f"Last failing output:\n{execution_output}"
+            )
+    else:
+        failure_signature = ""
 
     return {
         "test_code": report,
         "test_results": execution_output,
         "test_passed": test_passed,
         "test_iteration": test_iteration + 1,
+        "test_failure_signature": failure_signature,
         "generated_test_files": generated_test_files,
         "generated_project_dir": project_dir,
         "current_task_index": state.get("current_task_index", 0) if test_passed else 0,
         "review_feedback": feedback,
+        "error": error,
     }

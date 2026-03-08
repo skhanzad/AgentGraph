@@ -2,12 +2,12 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
 from rag import build_rag_context, store_output
 
 
 def orchestrator_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     user_request = state.get("user_request", "")
 
     rag_ctx = build_rag_context("orchestrator", user_request)

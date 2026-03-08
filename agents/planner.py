@@ -4,12 +4,12 @@ import json
 import re
 
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
 from rag import build_rag_context, store_output
 
 
 def planner_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     architecture_doc = state.get("architecture_doc", "")
     file_structure = state.get("file_structure", "")
     prd = state.get("prd", "")

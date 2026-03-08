@@ -1,14 +1,25 @@
 """Coder Agent: writes code per task spec, augmented with RAG retrieval."""
+from __future__ import annotations
+
+import hashlib
+import json
+
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from artifact_utils import clean_generated_content
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
+from config import MAX_STALLED_REWORKS
 from rag import build_rag_context, store_output, index_code
 
 
+def _codebase_signature(code_artifacts: dict[str, str]) -> str:
+    payload = json.dumps(code_artifacts, sort_keys=True, ensure_ascii=True)
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm(temperature=0.2)
+    llm = get_state_llm(state, temperature=0.2)
     task_list = state.get("task_list", [])
     code_artifacts = dict(state.get("code_artifacts") or {})
     generated_test_files = dict(state.get("generated_test_files") or {})
@@ -34,6 +45,8 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
     spec = task.get("spec", "")
     file_hint = task.get("file", "main.py")
     deps = task.get("deps", [])
+    prior_file_content = code_artifacts.get(task_id, "")
+    previous_signature = state.get("codebase_signature") or _codebase_signature(code_artifacts)
 
     # RAG: retrieve code patterns, architecture, and web API docs for the tech stack
     rag_ctx = build_rag_context(
@@ -44,9 +57,12 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
 
     # Gather context from previously implemented tasks
     context_parts = [f"Architecture:\n{architecture_doc}"]
+    context_parts.append(f"Task plan:\n{task_list}")
     for dep_id in deps:
         if dep_id in code_artifacts:
             context_parts.append(f"Existing code for {dep_id}:\n{code_artifacts[dep_id][:2000]}")
+    if prior_file_content or task_id in code_artifacts:
+        context_parts.append(f"Current content for {file_hint}:\n{prior_file_content[:4000]}")
     if review_feedback:
         context_parts.append(f"Review feedback to address:\n{review_feedback}")
     if patch_suggestion:
@@ -81,6 +97,11 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
     if task_id not in implemented_task_ids:
         implemented_task_ids.append(task_id)
 
+    new_signature = _codebase_signature(code_artifacts)
+    stalled_rework_count = 0 if new_signature != previous_signature else state.get("stalled_rework_count", 0)
+    if rework and new_signature == previous_signature:
+        stalled_rework_count = state.get("stalled_rework_count", 0) + 1
+
     # Store code in memory for RAG retrieval by reviewer/tester/debugger
     task_to_file = {t.get("id", ""): t.get("file", "") for t in task_list}
     store_output("coder", code, collection="codebase")
@@ -90,11 +111,20 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
     full_code = "\n\n".join(code_artifacts.values())
 
     next_index = task_index + 1
+    error = None
+    if rework and stalled_rework_count >= MAX_STALLED_REWORKS:
+        error = (
+            f"Coder rework stalled for `{file_hint}` after {stalled_rework_count} unchanged attempts. "
+            "The codebase did not converge."
+        )
     return {
         "code_artifacts": code_artifacts,
         "implemented_task_ids": implemented_task_ids,
         "current_code": full_code,
         "current_task_index": next_index,
+        "codebase_signature": new_signature,
+        "stalled_rework_count": stalled_rework_count,
         "review_feedback": "",
         "patch_suggestion": "",
+        "error": error,
     }

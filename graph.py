@@ -20,8 +20,17 @@ from agents import (
 )
 
 
+def _route_if_error(state: SoftwareAgentState) -> str | None:
+    if state.get("error"):
+        return END
+    return None
+
+
 def _route_after_coder(state: SoftwareAgentState) -> str:
     """After coder: more tasks -> coder; else -> project_writer."""
+    error_route = _route_if_error(state)
+    if error_route:
+        return error_route
     task_list = state.get("task_list") or []
     current = state.get("current_task_index", 0)
     if current < len(task_list):
@@ -31,6 +40,9 @@ def _route_after_coder(state: SoftwareAgentState) -> str:
 
 def _route_after_reviewer(state: SoftwareAgentState) -> str:
     """After reviewer: rejected -> coder (rework); approved -> tester."""
+    error_route = _route_if_error(state)
+    if error_route:
+        return error_route
     if state.get("review_passed"):
         return "tester"
     return "coder"
@@ -38,6 +50,9 @@ def _route_after_reviewer(state: SoftwareAgentState) -> str:
 
 def _route_after_tester(state: SoftwareAgentState) -> str:
     """After tester: failed -> coder; passed -> orchestrator_release."""
+    error_route = _route_if_error(state)
+    if error_route:
+        return error_route
     if state.get("test_passed"):
         return "orchestrator_release"
     return "coder"
@@ -45,6 +60,9 @@ def _route_after_tester(state: SoftwareAgentState) -> str:
 
 def _route_after_git(state: SoftwareAgentState) -> str:
     """After git: release snapshots end the graph; code snapshots go to review."""
+    error_route = _route_if_error(state)
+    if error_route:
+        return error_route
     if state.get("orchestration_phase") == "release_parallel":
         return END
     return "reviewer"

@@ -4,11 +4,11 @@ import re
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
 
 
 def docs_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     prd = state.get("prd", "")
     architecture_doc = state.get("architecture_doc", "")
     current_code = state.get("current_code", "")

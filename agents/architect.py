@@ -4,7 +4,7 @@ import re
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
 from rag import build_rag_context, store_output
 
 
@@ -16,7 +16,7 @@ def _extract_section(doc: str, header: str) -> str:
 
 
 def architect_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     project_brief = state.get("project_brief", "")
     prd = state.get("prd", "")
     user_request = state.get("user_request", "")

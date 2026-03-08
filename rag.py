@@ -6,6 +6,12 @@ import warnings
 from memory import MemoryStore
 from config import RAG_TOP_K, RAG_MAX_CONTEXT_CHARS, ENABLE_WEB_SEARCH, WEB_SEARCH_AGENTS
 
+warnings.filterwarnings(
+    "ignore",
+    message=r"This package \(`duckduckgo_search`\) has been renamed to `ddgs`!.*",
+    category=RuntimeWarning,
+)
+
 # Default collections each agent queries
 _AGENT_COLLECTIONS: dict[str, list[str]] = {
     "orchestrator": ["episodic"],
@@ -85,7 +91,9 @@ def search_web_docs(query: str, max_results: int = 3) -> str:
         from ddgs import DDGS
     except ImportError:
         try:
-            from duckduckgo_search import DDGS
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                from duckduckgo_search import DDGS
         except ImportError:
             return ""
 
@@ -98,7 +106,7 @@ def search_web_docs(query: str, max_results: int = 3) -> str:
 
     try:
         with warnings.catch_warnings():
-            warnings.simplefilter("ignore", RuntimeWarning)
+            warnings.simplefilter("ignore")
             with DDGS() as ddgs:
                 results = list(ddgs.text(query, max_results=max_results))
         if not results:

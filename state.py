@@ -7,6 +7,7 @@ class SoftwareAgentState(TypedDict, total=False):
 
     # User input
     user_request: str
+    model_name: str
 
     # Orchestrator
     project_brief: str
@@ -33,11 +34,14 @@ class SoftwareAgentState(TypedDict, total=False):
     code_artifacts: dict[str, str]  # task_id -> code or file_path -> content
     current_code: str
     implemented_task_ids: list[str]
+    codebase_signature: str
+    stalled_rework_count: int
 
     # Reviewer
     review_feedback: str
     review_passed: bool
     review_iteration: int
+    review_judgement: str
 
     # Tester
     test_code: str
@@ -45,6 +49,7 @@ class SoftwareAgentState(TypedDict, total=False):
     test_passed: bool
     test_iteration: int
     generated_test_files: dict[str, str]  # file path -> test file content
+    test_failure_signature: str
 
     # Debugger
     failure_analysis: str

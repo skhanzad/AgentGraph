@@ -32,6 +32,7 @@ class MemoryStore:
     """
 
     _instance: Optional["MemoryStore"] = None
+    PROJECT_COLLECTIONS = ("episodic", "codebase", "architecture")
 
     @classmethod
     def get(cls) -> "MemoryStore":
@@ -41,12 +42,18 @@ class MemoryStore:
 
     def __init__(self):
         os.makedirs(MEMORY_DIR, exist_ok=True)
-        self._client = chromadb.PersistentClient(path=MEMORY_DIR)
+        self._client = None
+        self._client_available = False
+        try:
+            self._client = chromadb.PersistentClient(path=MEMORY_DIR)
+            self._client_available = True
+        except Exception as e:
+            print(f"  [memory] Chroma persistence unavailable ({e}). Falling back to JSON-only memory.")
         try:
             self._ef = _OllamaChromaEF(model=EMBEDDING_MODEL, base_url=OLLAMA_BASE_URL)
             # Quick test to verify the embedding model is available
             self._ef(["test"])
-            self._available = True
+            self._available = self._client_available
         except Exception as e:
             print(f"  [memory] Embedding model '{EMBEDDING_MODEL}' unavailable ({e}). "
                   f"Run: ollama pull {EMBEDDING_MODEL}")
@@ -94,6 +101,14 @@ class MemoryStore:
             docs.append(record)
         self._save_fallback_docs(collection, docs)
 
+    def _clear_fallback_docs(self, collection: str) -> None:
+        path = self._fallback_path(collection)
+        if os.path.exists(path):
+            try:
+                os.remove(path)
+            except OSError:
+                self._save_fallback_docs(collection, [])
+
     @staticmethod
     def _tokenize(text: str) -> set[str]:
         return {token for token in re.findall(r"[A-Za-z0-9_]+", text.lower()) if len(token) > 1}
@@ -123,6 +138,8 @@ class MemoryStore:
         return self._available
 
     def _col(self, name: str) -> chromadb.Collection:
+        if self._client is None:
+            raise RuntimeError("Chroma client unavailable")
         if name not in self._collections:
             kwargs = {"name": name}
             if self._available:
@@ -201,3 +218,14 @@ class MemoryStore:
                     seen.add(key)
                     docs.append(doc)
         return docs[:k * 2]  # soft cap
+
+    def reset_project_memory(self) -> None:
+        """Clear project-scoped memory while preserving durable knowledge docs."""
+        for name in self.PROJECT_COLLECTIONS:
+            self._clear_fallback_docs(name)
+            if self._client is not None:
+                try:
+                    self._client.delete_collection(name=name)
+                except Exception:
+                    pass
+            self._collections.pop(name, None)

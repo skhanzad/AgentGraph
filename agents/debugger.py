@@ -2,11 +2,11 @@
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
-from llm import get_llm
+from llm import get_state_llm
 
 
 def debugger_node(state: SoftwareAgentState) -> SoftwareAgentState:
-    llm = get_llm()
+    llm = get_state_llm(state)
     test_results = state.get("test_results", "")
     current_code = state.get("current_code", "")
 

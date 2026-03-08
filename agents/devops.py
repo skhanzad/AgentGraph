@@ -5,7 +5,7 @@ import os
 import re
 
 from artifact_utils import clean_generated_content
-from llm import get_llm
+from llm import get_llm, get_state_model
 from state import SoftwareAgentState
 from langchain_core.messages import HumanMessage, SystemMessage
 
@@ -129,9 +129,9 @@ def _build_python_run_instructions(dependency_file: str, entry_file: str) -> str
     )
 
 
-def _llm_ci_hint(tech_stack: str, readme: str, file_structure: str) -> str:
+def _llm_ci_hint(tech_stack: str, readme: str, file_structure: str, model_name: str | None = None) -> str:
     """Use the model only for a short CI suggestion, not the Dockerfile itself."""
-    llm = get_llm()
+    llm = get_llm(model=model_name)
     system = """You are a DevOps engineer. Produce one concise CI command suggestion.
 
 Output only the command or one short sentence, with no markdown fence."""
@@ -165,7 +165,7 @@ def devops_node(state: SoftwareAgentState) -> SoftwareAgentState:
         run_instructions = _build_python_run_instructions(dependency_file, entry_file)
         ci_section = "Run: python -m pytest -v"
         try:
-            ci_section = _llm_ci_hint(tech_stack, readme, file_structure) or ci_section
+            ci_section = _llm_ci_hint(tech_stack, readme, file_structure, get_state_model(state)) or ci_section
         except Exception:
             pass
     else:
