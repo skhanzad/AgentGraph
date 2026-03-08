@@ -26,6 +26,10 @@ def _render_review_scope(state: SoftwareAgentState) -> str:
         clean_path = str(path or "tests/test_generated.py").strip()
         sections.append(f"### {clean_path}\n{str(content).strip()}")
 
+    readme = str(state.get("readme", "")).strip()
+    if readme:
+        sections.append(f"### README.md\n{readme}")
+
     if not sections:
         current_code = str(state.get("current_code", "")).strip()
         if current_code:
@@ -37,8 +41,12 @@ def _render_review_scope(state: SoftwareAgentState) -> str:
 def _parse_review_verdict(raw_content: str) -> tuple[bool, str]:
     lines = [line.strip() for line in raw_content.splitlines() if line.strip()]
     verdict = lines[0].upper() if lines else ""
+    if "APPROVED_WITH_NOTES" in verdict or "APPROVED WITH NOTES" in verdict:
+        return True, "APPROVED_WITH_NOTES"
     if verdict.startswith("APPROVED"):
         return True, "APPROVED"
+    if "NEEDS_REVISION" in verdict or "NEEDS REVISION" in verdict:
+        return False, "NEEDS_REVISION"
     return False, "REJECTED"
 
 
@@ -90,9 +98,19 @@ def reviewer_node(state: SoftwareAgentState) -> SoftwareAgentState:
 4. Missing files, incomplete implementations, or contradictions across files.
 
 You must review the full codebase, not a sample.
+Be flexible: only block progress for correctness, completeness, broken architecture, or testability issues.
+Minor style issues, small documentation nits, and non-critical polish should not block; use `APPROVED_WITH_NOTES` for those.
 
 Output format:
 APPROVED
+or
+APPROVED_WITH_NOTES
+- non-blocking note
+- non-blocking note
+or
+NEEDS_REVISION
+- blocking change
+- blocking change
 or
 REJECTED
 - required change
@@ -108,6 +126,7 @@ REJECTED
     raw_content = (response.content if hasattr(response, "content") else str(response)).strip()
     passed, judgement = _parse_review_verdict(raw_content)
     feedback = "" if passed else raw_content
+    review_notes = raw_content if judgement == "APPROVED_WITH_NOTES" else ""
 
     error = None
     if not passed and review_iteration >= MAX_REVIEW_ITERATIONS - 1:
@@ -124,5 +143,6 @@ REJECTED
         "review_passed": passed,
         "review_iteration": review_iteration + 1,
         "review_judgement": judgement,
+        "review_notes": review_notes,
         "error": error,
     }

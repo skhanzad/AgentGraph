@@ -27,7 +27,7 @@ def _route_if_error(state: SoftwareAgentState) -> str | None:
 
 
 def _route_after_coder(state: SoftwareAgentState) -> str:
-    """After coder: more tasks -> coder; else -> project_writer."""
+    """After coder: more tasks -> coder; else -> debugger."""
     error_route = _route_if_error(state)
     if error_route:
         return error_route
@@ -35,7 +35,7 @@ def _route_after_coder(state: SoftwareAgentState) -> str:
     current = state.get("current_task_index", 0)
     if current < len(task_list):
         return "coder"
-    return "project_writer"
+    return "debugger"
 
 
 def _route_after_reviewer(state: SoftwareAgentState) -> str:
@@ -95,10 +95,10 @@ def build_graph():
     graph.add_conditional_edges("coder", _route_after_coder)
     graph.add_conditional_edges("reviewer", _route_after_reviewer)
     graph.add_conditional_edges("tester", _route_after_tester)
-    graph.add_edge("debugger", "coder")
+    graph.add_edge("debugger", "docs")
+    graph.add_edge("docs", "project_writer")
     graph.add_edge("orchestrator_release", "docs")
     graph.add_edge("orchestrator_release", "devops")
-    graph.add_edge("docs", "project_writer")
     graph.add_edge("devops", "project_writer")
     graph.add_edge("project_writer", "git")
     graph.add_conditional_edges("git", _route_after_git)

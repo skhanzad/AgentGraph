@@ -42,6 +42,7 @@ class SoftwareAgentState(TypedDict, total=False):
     review_passed: bool
     review_iteration: int
     review_judgement: str
+    review_notes: str
 
     # Tester
     test_code: str
@@ -60,6 +61,7 @@ class SoftwareAgentState(TypedDict, total=False):
     readme: str
     api_docs: str
     inline_docs: str
+    readme_iteration: int
 
     # DevOps
     dockerfile: str

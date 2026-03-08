@@ -13,10 +13,14 @@ def docs_node(state: SoftwareAgentState) -> SoftwareAgentState:
     architecture_doc = state.get("architecture_doc", "")
     current_code = state.get("current_code", "")
     file_structure = state.get("file_structure", "")
+    existing_readme = state.get("readme", "")
+    review_judgement = state.get("review_judgement", "")
+    phase = "final release polish" if state.get("orchestration_phase") == "release_parallel" else "iterative project draft"
 
-    system = """You are a Technical Writer. Produce:
+    system = """You are a Technical Writer. Produce or revise a README.md iteratively.
 1. README.md content: project name, short description, prerequisites, how to install and run, and basic usage (commands or API summary). No redundant boilerplate.
 2. Optional: a short "API / Module overview" section if the project has clear modules or endpoints.
+3. If an existing README is provided, improve it instead of starting over from scratch. Keep good sections that are still accurate.
 
 Output in this structure (use the headers):
 
@@ -39,7 +43,18 @@ Output in this structure (use the headers):
 
     messages = [
         SystemMessage(content=system),
-        HumanMessage(content=f"PRD:\n{prd}\n\nArchitecture:\n{architecture_doc}\n\nFile structure:\n{file_structure}\n\nCode:\n{current_code}\n\nProduce README and API overview."),
+        HumanMessage(
+            content=(
+                f"Mode: {phase}\n\n"
+                f"PRD:\n{prd}\n\n"
+                f"Architecture:\n{architecture_doc}\n\n"
+                f"File structure:\n{file_structure}\n\n"
+                f"Code:\n{current_code}\n\n"
+                f"Current reviewer judgement:\n{review_judgement}\n\n"
+                f"Existing README draft:\n{existing_readme}\n\n"
+                "Produce the next README iteration and API overview."
+            )
+        ),
     ]
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)
@@ -51,4 +66,5 @@ Output in this structure (use the headers):
     return {
         "readme": content,
         "api_docs": api_docs,
+        "readme_iteration": state.get("readme_iteration", 0) + 1,
     }

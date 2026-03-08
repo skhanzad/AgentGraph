@@ -71,7 +71,7 @@ def main():
         sys.exit(1)
     model_name = (args.model or "").strip()
 
-    print("Running pipeline (Orchestrator → [PM || Architect] → Planner → Coder → Project Writer → Git → Reviewer → Tester → [Docs || DevOps] → Project Writer → Git)...")
+    print("Running pipeline (Orchestrator → [PM || Architect] → Planner → Coder → Debugger → Docs → Project Writer → Git → Reviewer → Tester → [Docs || DevOps] → Project Writer → Git)...")
     if model_name:
         print(f"(Using local LLM via Ollama with model: {model_name})")
     else:
