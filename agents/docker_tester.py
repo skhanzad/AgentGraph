@@ -1,11 +1,7 @@
-"""Docker Tester Agent: builds Docker image, runs the generated tests in container, validates the full package."""
+"""Docker Tester Agent: builds Docker image from the written project and validates it."""
 import os
-import re
-import shutil
 import subprocess
-import tempfile
 
-from artifact_utils import clean_generated_content
 from state import SoftwareAgentState
 from config import MAX_DOCKER_TEST_ITERATIONS
 
@@ -23,19 +19,6 @@ def _cleanup_docker():
         ["docker", "rmi", "-f", IMAGE_NAME],
         capture_output=True, timeout=30,
     )
-
-
-def _strip_fences(text: str) -> str:
-    """Remove outer markdown code fences."""
-    text = text.strip()
-    if text.startswith("```"):
-        lines = text.split("\n")
-        if lines[0].startswith("```"):
-            lines = lines[1:]
-        if lines and lines[-1].strip() == "```":
-            lines = lines[:-1]
-        text = "\n".join(lines)
-    return text
 
 
 def _looks_like_test_file(path: str) -> bool:
@@ -58,15 +41,15 @@ def _infer_test_command(tech_stack: str, test_files: list[str], all_files: list[
     tech = tech_stack.lower()
     if "python" in tech or any(f.endswith(".py") for f in all_files):
         if test_files:
-            return ["python", "-m", "pytest", "-v"] + test_files
-        return ["python", "-m", "pytest", "-v"]
+            return ["--entrypoint", "python", IMAGE_NAME, "-m", "pytest", "-v"] + test_files
+        return ["--entrypoint", "python", IMAGE_NAME, "-m", "pytest", "-v"]
     if "node" in tech or "javascript" in tech or "typescript" in tech:
-        return ["npm", "test"]
+        return [IMAGE_NAME, "npm", "test"]
     if "go" in tech:
-        return ["go", "test", "./..."]
+        return ["--entrypoint", "go", IMAGE_NAME, "test", "./..."]
     if "rust" in tech:
-        return ["cargo", "test"]
-    return ["python", "-m", "pytest", "-v"]
+        return ["--entrypoint", "cargo", IMAGE_NAME, "test"]
+    return ["--entrypoint", "python", IMAGE_NAME, "-m", "pytest", "-v"]
 
 
 def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
@@ -84,11 +67,9 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
         }
 
     task_list = state.get("task_list") or []
-    code_artifacts = state.get("code_artifacts") or {}
-    dockerfile_raw = state.get("dockerfile", "")
     tech_stack = state.get("tech_stack", "")
-    test_code_raw = state.get("test_code", "")
-    generated_test_files = state.get("generated_test_files") or {}
+    project_dir = state.get("generated_project_dir") or state.get("output_dir") or ""
+    project_dir = os.path.abspath(project_dir) if project_dir else ""
 
     # Map task_id -> file path
     task_to_file = {}
@@ -100,51 +81,16 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
 
     print(f"    Iteration {iteration + 1}/{MAX_DOCKER_TEST_ITERATIONS}")
 
-    # Write project to a temp directory
-    tmpdir = tempfile.mkdtemp(prefix="agentgraph_docker_")
     try:
-        # Write code artifacts
-        for task_id, code in code_artifacts.items():
-            path = task_to_file.get(task_id, f"{task_id}.py")
-            path = path.lstrip("/") or "main.py"
-            code = clean_generated_content(path, code)
-            full = os.path.join(tmpdir, path)
-            d = os.path.dirname(full)
-            if d:
-                os.makedirs(d, exist_ok=True)
-            with open(full, "w", encoding="utf-8") as f:
-                f.write(code)
-
-        # Write tester-generated test code if it's not already covered by a task
-        parsed_test_files = dict(generated_test_files)
-        if not parsed_test_files and test_code_raw:
-            extracted = clean_generated_content("tests/test_generated.py", test_code_raw)
-            if extracted and ("import" in extracted or "def test_" in extracted):
-                parsed_test_files["tests/test_generated.py"] = extracted
-
-        for rel_path, content in parsed_test_files.items():
-            test_dest = rel_path.lstrip("/") or "tests/test_generated.py"
-            full = os.path.join(tmpdir, test_dest)
-            d = os.path.dirname(full)
-            if d:
-                os.makedirs(d, exist_ok=True)
-            with open(full, "w", encoding="utf-8") as f:
-                f.write(clean_generated_content(test_dest, content))
-            if test_dest not in test_files and _looks_like_test_file(test_dest):
-                test_files.append(test_dest)
-            print(f"    Wrote tester-generated tests -> {test_dest}")
-
-        # Write Dockerfile
-        df_body = clean_generated_content("Dockerfile", _strip_fences(dockerfile_raw))
-        fence = re.search(r"```(?:dockerfile?)?\s*\n(.*?)```", df_body, re.DOTALL)
-        if fence:
-            df_body = fence.group(1).strip()
-        with open(os.path.join(tmpdir, "Dockerfile"), "w", encoding="utf-8") as f:
-            f.write(df_body)
-
-        # Write .dockerignore
-        with open(os.path.join(tmpdir, ".dockerignore"), "w", encoding="utf-8") as f:
-            f.write(".git\n__pycache__\n*.pyc\n.venv\n.env\n")
+        if not project_dir or not os.path.isdir(project_dir):
+            error = "Generated project directory is missing; project_writer must run before docker_tester."
+            return {
+                "docker_test_passed": False,
+                "docker_test_results": error,
+                "test_results": error,
+                "docker_test_iteration": iteration + 1,
+                "docker_test_phase": True,
+            }
 
         # Cleanup any leftover container/image from previous iteration
         _cleanup_docker()
@@ -153,7 +99,7 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
         print("    Building Docker image...")
         build = subprocess.run(
             ["docker", "build", "-t", IMAGE_NAME, "."],
-            cwd=tmpdir,
+            cwd=project_dir,
             capture_output=True,
             text=True,
             timeout=300,
@@ -173,9 +119,9 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
 
         # Run tests in container (overrides CMD with test command)
         test_cmd = _infer_test_command(tech_stack, test_files, all_files)
-        print(f"    Running tests: {' '.join(test_cmd)}")
+        print(f"    Running tests: docker run --rm --name {CONTAINER_NAME} {' '.join(test_cmd)}")
         run = subprocess.run(
-            ["docker", "run", "--name", CONTAINER_NAME, IMAGE_NAME] + test_cmd,
+            ["docker", "run", "--rm", "--name", CONTAINER_NAME] + test_cmd,
             capture_output=True,
             text=True,
             timeout=120,
@@ -249,5 +195,3 @@ def docker_tester_node(state: SoftwareAgentState) -> SoftwareAgentState:
             "docker_test_iteration": iteration + 1,
             "docker_test_phase": True,
         }
-    finally:
-        shutil.rmtree(tmpdir, ignore_errors=True)

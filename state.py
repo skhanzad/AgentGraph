@@ -65,6 +65,9 @@ class SoftwareAgentState(TypedDict, total=False):
     docker_test_results: str
     docker_test_iteration: int
     docker_test_phase: bool  # True while in the docker-test → debugger → coder loop
+    output_dir: str
+    generated_project_dir: str
+    state_snapshot_path: str
 
     # Control / routing
     next_node: Optional[str]

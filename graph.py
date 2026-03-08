@@ -14,14 +14,15 @@ from agents import (
     debugger_node,
     docs_node,
     devops_node,
+    project_writer_node,
     docker_tester_node,
 )
 
 
 def _route_after_coder(state: SoftwareAgentState) -> str:
-    """After coder: docker-test loop -> docker_tester; more tasks -> coder; else -> reviewer."""
+    """After coder: docker-test loop -> project_writer; more tasks -> coder; else -> reviewer."""
     if state.get("docker_test_phase"):
-        return "docker_tester"
+        return "project_writer"
     task_list = state.get("task_list") or []
     current = state.get("current_task_index", 0)
     if current < len(task_list):
@@ -63,6 +64,7 @@ def build_graph():
     graph.add_node("debugger", debugger_node)
     graph.add_node("docs", docs_node)
     graph.add_node("devops", devops_node)
+    graph.add_node("project_writer", project_writer_node)
     graph.add_node("docker_tester", docker_tester_node)
 
     graph.set_entry_point("orchestrator")
@@ -76,7 +78,8 @@ def build_graph():
     graph.add_conditional_edges("tester", _route_after_tester)
     graph.add_edge("debugger", "coder")
     graph.add_edge("docs", "devops")
-    graph.add_edge("devops", "docker_tester")
+    graph.add_edge("devops", "project_writer")
+    graph.add_edge("project_writer", "docker_tester")
     graph.add_conditional_edges("docker_tester", _route_after_docker_tester)
 
     return graph.compile(checkpointer=MemorySaver())
