@@ -45,7 +45,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    print("Running pipeline (Orchestrator → PM → Architect → Planner → Coder → Reviewer → Tester → Docs → DevOps → Project Writer → Git)...")
+    print("Running pipeline (Orchestrator → [PM || Architect] → Planner → Coder → Project Writer → Git → Reviewer → Tester → [Docs || DevOps] → Project Writer → Git)...")
     print("(Using local LLM via Ollama; ensure 'ollama serve' is running and model is pulled.)\n")
     try:
         state = run_pipeline(request, args.output)

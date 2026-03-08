@@ -97,6 +97,7 @@ def _build_python_dockerfile(
     lines.extend([
         "",
         "RUN pip install pytest",
+        "RUN python -m pytest -v",
     ])
 
     port = _infer_exposed_port(project_text)
@@ -121,7 +122,7 @@ def _build_python_run_instructions(dependency_file: str, entry_file: str) -> str
         [
             "## Run instructions",
             f"Local: {install_cmd} && python {entry_file}",
-            "Docker build: docker build -t app .",
+            "Docker build (runs tests): docker build -t app .",
             "Docker run: docker run --rm app",
             "Docker tests: docker run --rm --entrypoint python app -m pytest -v",
         ]

@@ -11,6 +11,7 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
     llm = get_llm(temperature=0.2)
     task_list = state.get("task_list", [])
     code_artifacts = dict(state.get("code_artifacts") or {})
+    generated_test_files = dict(state.get("generated_test_files") or {})
     implemented_task_ids = list(state.get("implemented_task_ids") or [])
     current_task_index = state.get("current_task_index", 0)
     architecture_doc = state.get("architecture_doc", "")
@@ -21,7 +22,7 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
     # Rework mode: reviewer or debugger sent us back
     rework = bool(review_feedback or patch_suggestion)
     if rework:
-        task_index = max(0, current_task_index - 1)
+        task_index = 0 if current_task_index >= len(task_list) else max(0, current_task_index - 1)
     else:
         task_index = current_task_index
 
@@ -50,6 +51,12 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
         context_parts.append(f"Review feedback to address:\n{review_feedback}")
     if patch_suggestion:
         context_parts.append(f"Debugger patch suggestion:\n{patch_suggestion}")
+    if generated_test_files:
+        rendered_tests = "\n\n".join(
+            f"{path}:\n{content[:2000]}"
+            for path, content in generated_test_files.items()
+        )
+        context_parts.append(f"Current executed tests:\n{rendered_tests}")
     if rag_ctx:
         context_parts.append(f"Retrieved reference material:\n{rag_ctx}")
     context = "\n\n---\n\n".join(context_parts)
@@ -58,6 +65,8 @@ def coder_node(state: SoftwareAgentState) -> SoftwareAgentState:
 - Output only the code (or the content of the primary file). No markdown fences unless the spec asks for multiple files; then use clear filenames as comments.
 - Follow the architecture and use existing code from context where relevant.
 - Use the retrieved reference material (documentation, code patterns) to write correct, idiomatic code.
+- If the feedback includes failing tests, rewrite the implementation so those tests pass.
+- On rework, return the full replacement file content, not a diff.
 - Prefer clear, runnable code. Include minimal docstrings and type hints if the language supports them."""
 
     messages = [

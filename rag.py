@@ -1,6 +1,8 @@
 """RAG Pipeline: retrieval from memory + web documentation search."""
 from __future__ import annotations
 
+import warnings
+
 from memory import MemoryStore
 from config import RAG_TOP_K, RAG_MAX_CONTEXT_CHARS, ENABLE_WEB_SEARCH, WEB_SEARCH_AGENTS
 
@@ -80,9 +82,12 @@ def search_web_docs(query: str, max_results: int = 3) -> str:
     Caches fetched content in the knowledge collection for future retrieval.
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
     except ImportError:
-        return ""
+        try:
+            from duckduckgo_search import DDGS
+        except ImportError:
+            return ""
 
     mem = MemoryStore.get()
 
@@ -92,8 +97,10 @@ def search_web_docs(query: str, max_results: int = 3) -> str:
         return "### Cached documentation\n" + "\n---\n".join(cached)
 
     try:
-        with DDGS() as ddgs:
-            results = list(ddgs.text(query, max_results=max_results))
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore", RuntimeWarning)
+            with DDGS() as ddgs:
+                results = list(ddgs.text(query, max_results=max_results))
         if not results:
             return ""
     except Exception:

@@ -70,9 +70,12 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
     for path, content in generated_test_files.items():
         clean_path = (path or "tests/test_generated.py").lstrip("/")
         full = os.path.join(out_dir, clean_path)
-        if full not in written_files:
-            _write_file(full, clean_generated_content(clean_path, content))
-            written_files.add(full)
+        _write_file(full, clean_generated_content(clean_path, content))
+        written_files.add(full)
+
+    gitignore_path = os.path.join(out_dir, ".gitignore")
+    if not os.path.exists(gitignore_path):
+        _write_file(gitignore_path, "__pycache__/\n*.pyc\n.pytest_cache/\n.venv/\n.env\n")
 
     readme = state.get("readme", "")
     if readme and readme.strip():
