@@ -13,20 +13,29 @@ def planner_node(state: SoftwareAgentState) -> SoftwareAgentState:
     file_structure = state.get("file_structure", "")
     prd = state.get("prd", "")
 
-    system = """You are a Task Planner. Given the architecture and file structure, break the project into atomic coding tasks.
-Output a JSON array of tasks. Each task must have:
-- "id": string, e.g. "task_1", "task_2"
-- "spec": string, what to implement (one clear deliverable)
-- "deps": array of task ids that must be done before this one (e.g. ["task_1"])
-- "file": string, primary file to create or modify (e.g. "src/main.py")
+    system = """You are a Task Planner. Given the architecture and file structure, produce tasks that together form the ENTIRE codebase as a shippable package. Every file in the File Structure must be covered by exactly one task.
 
-Example:
+Each task must have:
+- "id": string, e.g. "task_1", "task_2"
+- "spec": string, what to implement (one clear deliverable for that file)
+- "deps": array of task ids that must be done before this one (e.g. ["task_1"])
+- "file": string, path to the file to create (must match the File Structure)
+
+Include tasks for:
+1. Dependency file first: requirements.txt (Python) or pyproject.toml, or equivalent for other languages.
+2. Package/root __init__.py if the layout has packages.
+3. Main entry point and all source modules.
+4. Test file(s).
+Do NOT include Dockerfile or CI config—DevOps will add those later.
+
+Example for a Python app:
 [
-  {"id": "task_1", "spec": "Create project skeleton and main entry point", "deps": [], "file": "src/main.py"},
-  {"id": "task_2", "spec": "Implement core logic module", "deps": ["task_1"], "file": "src/core.py"}
+  {"id": "task_1", "spec": "Create requirements.txt with all project dependencies", "deps": [], "file": "requirements.txt"},
+  {"id": "task_2", "spec": "Create main entry point", "deps": ["task_1"], "file": "src/main.py"},
+  {"id": "task_3", "spec": "Create tests for main", "deps": ["task_2"], "file": "tests/test_main.py"}
 ]
 
-Output ONLY the JSON array, no markdown or explanation. Order tasks so dependencies come first."""
+Output ONLY the JSON array, no markdown or explanation. Order tasks so dependencies come first. Every file in the architecture's File Structure must appear as a task's "file"."""
 
     messages = [
         SystemMessage(content=system),

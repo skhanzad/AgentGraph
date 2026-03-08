@@ -1,4 +1,4 @@
-"""DevOps Agent: Dockerfile, CI stub, run instructions."""
+"""DevOps Agent: produces Dockerfile and run instructions for the full package."""
 from langchain_core.messages import SystemMessage, HumanMessage
 
 from state import SoftwareAgentState
@@ -10,27 +10,42 @@ def devops_node(state: SoftwareAgentState) -> SoftwareAgentState:
     tech_stack = state.get("tech_stack", "")
     file_structure = state.get("file_structure", "")
     readme = state.get("readme", "")
+    code_artifacts = state.get("code_artifacts") or {}
+    task_list = state.get("task_list") or []
 
-    system = """You are a DevOps engineer. Given the tech stack and project layout:
-1. If the project is Python: produce a minimal Dockerfile that runs the main application (assume main entry in src/ or root).
-2. Add a one-line or minimal CI suggestion (e.g. "Run: pytest" or "Use GitHub Actions with pytest").
-3. Short "Run instructions": exact commands to run locally and optionally in Docker.
+    # Infer entry and dependency file from tasks
+    task_files = [t.get("file", "") for t in task_list]
+    has_requirements = any("requirements" in f for f in task_files)
+    entry_hint = "src/main.py" if any("main" in f for f in task_files) else "main.py"
 
-Output format:
+    system = """You are a DevOps engineer. Your job is to produce a complete Dockerfile so the entire codebase runs as a containerized package.
+
+Requirements for the Dockerfile:
+- Base image appropriate for the tech stack (e.g. python:3.11-slim for Python).
+- Copy the full project into the image (COPY . . or COPY project/ .).
+- Install dependencies: for Python use RUN pip install -r requirements.txt (or pip install . if pyproject.toml exists).
+- Set working directory and expose any needed port (EXPOSE if it's a server).
+- Set CMD or ENTRYPOINT to run the main application (e.g. CMD ["python", "src/main.py"] or CMD ["python", "-m", "src.main"]).
+- No placeholder or "fill in" steps—the Dockerfile must be complete and runnable as-is.
+
+Output format (use these exact section headers):
 
 ## Dockerfile
-...
-(contents of Dockerfile)
+<full Dockerfile content, line by line, no markdown code fence around it>
 
 ## CI
-...
+One-line or minimal CI suggestion (e.g. "Run: pytest").
 
 ## Run instructions
-..."""
+Exact commands: how to run locally (e.g. pip install -r requirements.txt && python src/main.py) and how to build/run with Docker (docker build -t app . && docker run app)."""
 
     messages = [
         SystemMessage(content=system),
-        HumanMessage(content=f"Tech stack:\n{tech_stack}\n\nFile structure:\n{file_structure}\n\nREADME (for context):\n{readme}\n\nProduce Dockerfile, CI, and run instructions."),
+        HumanMessage(
+            content=f"Tech stack:\n{tech_stack}\n\nFile structure:\n{file_structure}\n\n"
+            f"Dependency file present: {has_requirements}. Main entry hint: {entry_hint}\n\n"
+            f"README (context):\n{readme[:1500]}\n\nProduce a complete Dockerfile plus CI and run instructions."
+        ),
     ]
     response = llm.invoke(messages)
     content = response.content if hasattr(response, "content") else str(response)

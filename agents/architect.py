@@ -26,12 +26,21 @@ Main components and how they interact (one short paragraph).
 If applicable: main endpoints, modules, or public interfaces with their purpose (bullet list). Otherwise describe the main entry points and modules.
 
 ## File Structure
-Proposed directory layout as a tree. Example:
+Proposed directory layout as a complete, shippable package. Must include:
+- Dependency file: requirements.txt (Python) or equivalent (e.g. package.json, go.mod).
+- Source layout: e.g. src/ or a top-level package with main entry point.
+- Tests: tests/ or test file(s).
+- README.md (Docs agent will fill content).
+
+Example for a Python package:
 ```
 project/
+  requirements.txt
   src/
+    __init__.py
     main.py
   tests/
+    test_main.py
   README.md
 ```
 

@@ -51,20 +51,30 @@ def write_project(state: SoftwareAgentState, out_dir: str) -> None:
             f.write(readme)
         print(f"  wrote {readme_path}")
 
-    # Dockerfile (extract from devops output if present)
-    dockerfile = state.get("dockerfile", "")
-    if dockerfile and "Dockerfile" in dockerfile:
-        block = re.search(r"(?:## Dockerfile|```dockerfile?)\s*\n(.*?)(?:\n```|\Z)", dockerfile, re.DOTALL | re.IGNORECASE)
-        if block:
-            df_path = os.path.join(out_dir, "Dockerfile")
-            with open(df_path, "w", encoding="utf-8") as f:
-                f.write(block.group(1).strip())
-            print(f"  wrote {df_path}")
-    elif dockerfile:
+    # Dockerfile (DevOps always produces one for the full package)
+    dockerfile_raw = state.get("dockerfile", "")
+    if dockerfile_raw:
+        # Extract content after "## Dockerfile" or between ```dockerfile ... ```
+        after_header = re.search(r"##\s*Dockerfile\s*\n(.*?)(?=\n##\s|\Z)", dockerfile_raw, re.DOTALL | re.IGNORECASE)
+        in_fence = re.search(r"```(?:dockerfile?)?\s*\n(.*?)```", dockerfile_raw, re.DOTALL | re.IGNORECASE)
+        if after_header:
+            body = after_header.group(1).strip()
+        elif in_fence:
+            body = in_fence.group(1).strip()
+        else:
+            body = dockerfile_raw.strip()
+        # Drop any trailing markdown sections (## CI, ## Run)
+        body = re.sub(r"\n##\s+.*", "", body).strip()
         df_path = os.path.join(out_dir, "Dockerfile")
         with open(df_path, "w", encoding="utf-8") as f:
-            f.write(dockerfile.strip())
+            f.write(body)
         print(f"  wrote {df_path}")
+        # .dockerignore to keep image small
+        dockerignore_path = os.path.join(out_dir, ".dockerignore")
+        if not os.path.exists(dockerignore_path):
+            with open(dockerignore_path, "w", encoding="utf-8") as f:
+                f.write(".git\n__pycache__\n*.pyc\n.venv\n.env\n*.md\n")
+            print(f"  wrote {dockerignore_path}")
 
     # Optional: architecture and PRD as docs
     for name, content in [
