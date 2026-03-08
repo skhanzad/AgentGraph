@@ -5,9 +5,9 @@ import os
 import sys
 
 from config import OUTPUT_DIR
-from project_writer import write_project
 from state import SoftwareAgentState
 from graph import build_graph
+
 
 def run_pipeline(user_request: str, out_dir: str) -> SoftwareAgentState:
     app = build_graph()
@@ -45,7 +45,7 @@ def main():
         parser.print_help()
         sys.exit(1)
 
-    print("Running pipeline (Orchestrator → PM → Architect → Planner → Coder → Reviewer → Tester → Docs → DevOps → Docker Test)...")
+    print("Running pipeline (Orchestrator → PM → Architect → Planner → Coder → Reviewer → Tester → Docs → DevOps → Project Writer → Git)...")
     print("(Using local LLM via Ollama; ensure 'ollama serve' is running and model is pulled.)\n")
     try:
         state = run_pipeline(request, args.output)
@@ -53,8 +53,11 @@ def main():
         print(f"Pipeline error: {e}", file=sys.stderr)
         sys.exit(1)
 
-    print("\nWriting project to", os.path.abspath(args.output))
-    write_project(state, args.output)
+    print("\nProject written to", os.path.abspath(args.output))
+    if state.get("git_commit_hash"):
+        print("Git commit:", state["git_commit_hash"])
+    elif state.get("git_status"):
+        print("Git status:", state["git_status"])
     print("Done.")
 
 

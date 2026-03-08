@@ -5,6 +5,7 @@ from langgraph.checkpoint.memory import MemorySaver
 from state import SoftwareAgentState
 from agents import (
     orchestrator_node,
+    orchestrator_release_node,
     pm_node,
     architect_node,
     planner_node,
@@ -15,19 +16,17 @@ from agents import (
     docs_node,
     devops_node,
     project_writer_node,
-    docker_tester_node,
+    git_node,
 )
 
 
 def _route_after_coder(state: SoftwareAgentState) -> str:
-    """After coder: docker-test loop -> project_writer; more tasks -> coder; else -> reviewer."""
-    if state.get("docker_test_phase"):
-        return "project_writer"
+    """After coder: more tasks -> coder; else -> project_writer."""
     task_list = state.get("task_list") or []
     current = state.get("current_task_index", 0)
     if current < len(task_list):
         return "coder"
-    return "reviewer"
+    return "project_writer"
 
 
 def _route_after_reviewer(state: SoftwareAgentState) -> str:
@@ -38,23 +37,24 @@ def _route_after_reviewer(state: SoftwareAgentState) -> str:
 
 
 def _route_after_tester(state: SoftwareAgentState) -> str:
-    """After tester: failed -> debugger; passed -> docs."""
+    """After tester: failed -> coder; passed -> orchestrator_release."""
     if state.get("test_passed"):
-        return "docs"
-    return "debugger"
+        return "orchestrator_release"
+    return "coder"
 
 
-def _route_after_docker_tester(state: SoftwareAgentState) -> str:
-    """After docker_tester: passed -> END; failed -> debugger for fix loop."""
-    if state.get("docker_test_passed"):
+def _route_after_git(state: SoftwareAgentState) -> str:
+    """After git: release snapshots end the graph; code snapshots go to review."""
+    if state.get("orchestration_phase") == "release_parallel":
         return END
-    return "debugger"
+    return "reviewer"
 
 
 def build_graph():
     graph = StateGraph(SoftwareAgentState)
 
     graph.add_node("orchestrator", orchestrator_node)
+    graph.add_node("orchestrator_release", orchestrator_release_node)
     graph.add_node("pm", pm_node)
     graph.add_node("architect", architect_node)
     graph.add_node("planner", planner_node)
@@ -65,11 +65,12 @@ def build_graph():
     graph.add_node("docs", docs_node)
     graph.add_node("devops", devops_node)
     graph.add_node("project_writer", project_writer_node)
-    graph.add_node("docker_tester", docker_tester_node)
+    graph.add_node("git", git_node)
 
     graph.set_entry_point("orchestrator")
     graph.add_edge("orchestrator", "pm")
-    graph.add_edge("pm", "architect")
+    graph.add_edge("orchestrator", "architect")
+    graph.add_edge("pm", "planner")
     graph.add_edge("architect", "planner")
     graph.add_edge("planner", "coder")
 
@@ -77,10 +78,12 @@ def build_graph():
     graph.add_conditional_edges("reviewer", _route_after_reviewer)
     graph.add_conditional_edges("tester", _route_after_tester)
     graph.add_edge("debugger", "coder")
-    graph.add_edge("docs", "devops")
+    graph.add_edge("orchestrator_release", "docs")
+    graph.add_edge("orchestrator_release", "devops")
+    graph.add_edge("docs", "project_writer")
     graph.add_edge("devops", "project_writer")
-    graph.add_edge("project_writer", "docker_tester")
-    graph.add_conditional_edges("docker_tester", _route_after_docker_tester)
+    graph.add_edge("project_writer", "git")
+    graph.add_conditional_edges("git", _route_after_git)
 
     return graph.compile(checkpointer=MemorySaver())
 

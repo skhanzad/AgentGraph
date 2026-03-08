@@ -9,7 +9,6 @@ DEFAULT_MODEL = os.getenv("SOFTWARE_AGENT_MODEL", "llama3")
 OUTPUT_DIR = os.getenv("SOFTWARE_OUTPUT_DIR", "./generated_project")
 MAX_REVIEW_ITERATIONS = 3
 MAX_DEBUG_ITERATIONS = 3
-MAX_DOCKER_TEST_ITERATIONS = 3
 
 # Memory / RAG
 MEMORY_DIR = os.getenv("AGENT_MEMORY_DIR", "./.agentgraph_memory")

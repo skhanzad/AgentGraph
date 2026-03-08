@@ -11,6 +11,7 @@ class SoftwareAgentState(TypedDict, total=False):
     # Orchestrator
     project_brief: str
     delegated_plan: str
+    orchestration_phase: str
 
     # Product Manager
     prd: str
@@ -60,14 +61,15 @@ class SoftwareAgentState(TypedDict, total=False):
     cicd_config: str
     run_instructions: str
 
-    # Docker Tester
-    docker_test_passed: bool
-    docker_test_results: str
-    docker_test_iteration: int
-    docker_test_phase: bool  # True while in the docker-test → debugger → coder loop
+    # Project output
     output_dir: str
     generated_project_dir: str
     state_snapshot_path: str
+
+    # Git
+    git_initialized: bool
+    git_commit_hash: str
+    git_status: str
 
     # Control / routing
     next_node: Optional[str]

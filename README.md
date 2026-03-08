@@ -1,10 +1,11 @@
 # Multi-Agent Software Engineering (LangGraph + Local LLM)
 
-A LangGraph project that implements the multi-agent software architecture from the reference diagram: **Orchestrator → Product Manager → Architect → Planner → Coder → Reviewer → Tester** (with **Debugger** loop) → **Documentation** → **DevOps**. All agents use **local LLMs via Ollama**.
+A LangGraph project that implements the multi-agent software architecture as an orchestrator-supervised graph rather than a straight pipeline. The Orchestrator fans out independent specialist work in parallel: **Orchestrator → [Product Manager || Architect] → Planner → Coder → Project Writer → Git → Reviewer → Tester**, with the core implementation loop repeating as **Tester → Coder → Project Writer → Git** until tests pass. After that, the Orchestrator fans out the release branch as **Orchestrator Release → [Documentation || DevOps] → Project Writer → Git**. All agents use **local LLMs via Ollama**.
 
 ## Architecture
 
 - **Orchestrator**: Parses user requirements, delegates to specialists, manages flow.
+  It coordinates parallel design and release branches.
 - **Product Manager**: Produces PRD, user stories, acceptance criteria.
 - **Architect**: System design, tech stack, APIs, high-level structure.
 - **Planner**: Breaks work into atomic tasks with dependencies.
@@ -14,6 +15,8 @@ A LangGraph project that implements the multi-agent software architecture from t
 - **Debugger**: Root cause and patches; sends back to Coder.
 - **Documentation**: README, API docs, inline comments.
 - **DevOps**: Build/deploy config (e.g. Dockerfile, CI stub).
+- **Project Writer**: Materializes the generated project and state snapshot on disk.
+- **Git**: Initializes a git repository in the generated project and creates a snapshot commit.
 
 ## Prerequisites
 

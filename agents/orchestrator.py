@@ -31,5 +31,13 @@ Output ONLY the project brief, no meta-commentary."""
 
     return {
         "project_brief": project_brief,
-        "delegated_plan": "pm -> architect -> planner -> coder -> reviewer -> tester -> docs -> devops",
+        "delegated_plan": "orchestrator_intake -> [pm || architect] -> planner -> coder -> reviewer -> tester -> orchestrator_release -> [docs || devops] -> project_writer -> git",
+        "orchestration_phase": "design_parallel",
+    }
+
+
+def orchestrator_release_node(state: SoftwareAgentState) -> SoftwareAgentState:
+    """Mark the release/documentation phase before parallel docs/devops work."""
+    return {
+        "orchestration_phase": "release_parallel",
     }

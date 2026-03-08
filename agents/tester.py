@@ -83,4 +83,5 @@ Tests failed: <short reason>"""
         "test_passed": test_passed,
         "test_iteration": test_iteration + 1,
         "generated_test_files": generated_test_files,
+        "review_feedback": "" if test_passed else f"Fix the code to satisfy these failing tests:\n\n{content}",
     }

@@ -13,6 +13,8 @@ def planner_node(state: SoftwareAgentState) -> SoftwareAgentState:
     architecture_doc = state.get("architecture_doc", "")
     file_structure = state.get("file_structure", "")
     prd = state.get("prd", "")
+    project_brief = state.get("project_brief", "")
+    planning_input = prd or project_brief
 
     rag_ctx = build_rag_context("planner", f"{architecture_doc[:300]} task planning")
 
@@ -40,7 +42,7 @@ Example for a Python app:
 
 Output ONLY the JSON array, no markdown or explanation. Order tasks so dependencies come first. Every file in the architecture's File Structure must appear as a task's "file"."""
 
-    human = f"Architecture:\n{architecture_doc}\n\nFile structure:\n{file_structure}\n\nPRD:\n{prd}"
+    human = f"Architecture:\n{architecture_doc}\n\nFile structure:\n{file_structure}\n\nPRD / Brief:\n{planning_input}"
     if rag_ctx:
         human += f"\n\nRetrieved context:\n{rag_ctx}"
     human += "\n\nProduce the task list as JSON array."

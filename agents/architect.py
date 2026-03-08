@@ -19,6 +19,8 @@ def architect_node(state: SoftwareAgentState) -> SoftwareAgentState:
     llm = get_llm()
     project_brief = state.get("project_brief", "")
     prd = state.get("prd", "")
+    user_request = state.get("user_request", "")
+    planning_context = prd or project_brief or user_request
 
     # RAG: retrieve past architecture decisions + web docs for tech stack
     rag_ctx = build_rag_context(
@@ -63,7 +65,7 @@ project/
 
 Output only the markdown content of Architecture.md. Start with "# Architecture". No preamble or meta-commentary."""
 
-    human = f"Project brief:\n{project_brief}\n\nPRD / User stories:\n{prd}"
+    human = f"Project brief:\n{project_brief}\n\nPRD / User stories:\n{planning_context}"
     if rag_ctx:
         human += f"\n\nRetrieved reference material:\n{rag_ctx}"
     human += "\n\nProduce Architecture.md content."
